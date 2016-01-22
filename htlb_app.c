@@ -59,13 +59,6 @@ int set_hp(int set_val)
     printf("set: %d / %d\n", ret, set_val);
 
     return ret;
-    /* if (fprintf(f_nr_hp, "%d", set_val) > 0) { */
-    /*     printf("set to %d\n", set_val); */
-    /*     return 0; */
-    /* } else { */
-    /*     printf("set err: %d\n", set_val); */
-    /*     return -1; */
-    /* } */
 }
 
 int main(int argc, char *argv[])
@@ -74,16 +67,12 @@ int main(int argc, char *argv[])
 
     set_val = parse_set(argc, argv);
 
-
-    print_cur_hp(f_nr_hp);
+    print_cur_hp();
 
     if (set_val != -1) {
-        set_hp(f_nr_hp, set_val);
-        fclose(f_nr_hp);
-        f_nr_hp = fopen(FILE_PATH_NR_HP, "rw");
-        print_cur_hp(f_nr_hp);
+        set_hp(set_val);
+        print_cur_hp();
     }
 
-    fclose(f_nr_hp);
     return 0;
 }
