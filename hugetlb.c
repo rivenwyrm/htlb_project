@@ -969,14 +969,41 @@ static int alloc_fresh_huge_page(struct hstate *h, nodemask_t *nodes_allowed)
 	struct page *page;
 	int nr_nodes, node;
 	int ret = 0;
+    int tries = 0;
 
-	for_each_node_mask_to_alloc(h, nr_nodes, node, nodes_allowed) {
-		page = alloc_fresh_huge_page_node(h, node);
-		if (page) {
-			ret = 1;
-			break;
-		}
-	}
+    do {
+        for_each_node_mask_to_alloc(h, nr_nodes, node, nodes_allowed) {
+            page = alloc_fresh_huge_page_node(h, node);
+            if (page) {
+                printk("jvs: alloc %d\n", ret);
+                ret = 1;
+                break;
+            }
+        }
+
+        if (ret == 0) {
+            for_each_node_mask_to_free(h, nr_nodes, node, nodes_allowed) {
+                printk("jvs: free %d\n", ret);
+                // check if page in use
+                struct page *page =
+                        list_entry(h->hugepage_freelists[node].next,
+                                struct page, lru);
+                if (__free_pages_ok(page, h->order)) {
+                    // free it up
+                    __free_pages(page, h->order);
+                    // Now alloc
+                    page = alloc_fresh_huge_page_node(h, node);
+                    if (page) {
+                        printk("jvs: retried %d\n", ret);
+                        ret = 1;
+                        break;
+                    }
+                }
+                //update_and_free_page(h, page); find equivalent for normal pages
+            }
+            tries++;
+        }
+    } while (ret == 0 && tries < 3);
 
 	if (ret)
 		count_vm_event(HTLB_BUDDY_PGALLOC);
@@ -1435,6 +1462,7 @@ static void __init hugetlb_hstate_alloc_pages(struct hstate *h)
 		if (hstate_is_gigantic(h)) {
 			if (!alloc_bootmem_huge_page(h))
 				break;
+
 		} else if (!alloc_fresh_huge_page(h,
 					 &node_states[N_MEMORY]))
 			break;
