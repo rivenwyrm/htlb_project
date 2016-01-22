@@ -6,6 +6,7 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/mm.h>
+#include <linux/mmzone.h>
 #include <linux/seq_file.h>
 #include <linux/sysctl.h>
 #include <linux/highmem.h>
@@ -964,6 +965,19 @@ static struct page *alloc_fresh_huge_page_node(struct hstate *h, int nid)
 	return page;
 }
 
+// temp stolen from page_alloc.c
+static void wake_all_kswapds(unsigned int order,
+			     struct zonelist *zonelist,
+			     enum zone_type high_zoneidx,
+			     struct zone *preferred_zone)
+{
+	struct zoneref *z;
+	struct zone *zone;
+
+	for_each_zone_zonelist(zone, z, zonelist, high_zoneidx)
+		wakeup_kswapd(zone, order, zone_idx(preferred_zone));
+}
+
 static int alloc_fresh_huge_page(struct hstate *h, nodemask_t *nodes_allowed)
 {
 	struct page *page;
@@ -975,31 +989,37 @@ static int alloc_fresh_huge_page(struct hstate *h, nodemask_t *nodes_allowed)
         for_each_node_mask_to_alloc(h, nr_nodes, node, nodes_allowed) {
             page = alloc_fresh_huge_page_node(h, node);
             if (page) {
-                printk("jvs: alloc %d\n", ret);
+                printk("jvs: alloc %d\n", tries);
                 ret = 1;
                 break;
             }
         }
 
         if (ret == 0) {
-            for_each_node_mask_to_free(h, nr_nodes, node, nodes_allowed) {
-                printk("jvs: free %d\n", ret);
-                // check if page in use
-                struct page *page =
-                        list_entry(h->hugepage_freelists[node].next,
-                                struct page, lru);
-                if (__free_pages_ok(page, h->order)) {
-                    // free it up
-                    __free_pages(page, h->order);
-                    // Now alloc
-                    page = alloc_fresh_huge_page_node(h, node);
-                    if (page) {
-                        printk("jvs: retried %d\n", ret);
-                        ret = 1;
-                        break;
-                    }
+            gfp_t gfp_mask = htlb_alloc_mask|__GFP_COMP|__GFP_THISNODE|
+                    __GFP_REPEAT|__GFP_NOWARN;
+            enum zone_type high_zoneidx = gfp_zone(gfp_mask);
+            for_each_node_mask_to_alloc(h, nr_nodes, node, nodes_allowed) {
+                struct zonelist *zonelist = node_zonelist(node, gfp_mask);
+                struct zone *preferred_zone;
+                first_zones_zonelist(zonelist, high_zoneidx, NULL,
+                        &preferred_zone);
+                if (preferred_zone) {
+                    /*
+                     * alloc_fresh_huge_page_node ->
+                     *     alloc_pages_exact_node -> __alloc_pages(gfp_mask, order,
+                     *                                             node_zonelist(nid, gfp_mask)->
+                     *     __alloc_pages_nodemask (core alloc)
+                     */
+                    printk("jvs: free %d\n", tries);
+                    //__alloc_pages_slowpath(gfp_mask, order, zonelist,
+                    //    high_zoneidx, nodemask, zone, migratetype);
+                    wake_all_kswapds(huge_page_order(h),
+                            zonelist, high_zoneidx, preferred_zone);
+                    // if that doesn't work, move the pages
+                    // has_unmovable_pages() 
+                    // move_freepages
                 }
-                //update_and_free_page(h, page); find equivalent for normal pages
             }
             tries++;
         }
