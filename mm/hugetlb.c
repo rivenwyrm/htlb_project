@@ -965,31 +965,17 @@ static struct page *alloc_fresh_huge_page_node(struct hstate *h, int nid)
 	return page;
 }
 
-// temp stolen from page_alloc.c
-static void wake_all_kswapds(unsigned int order,
-			     struct zonelist *zonelist,
-			     enum zone_type high_zoneidx,
-			     struct zone *preferred_zone)
-{
-	struct zoneref *z;
-	struct zone *zone;
-
-	for_each_zone_zonelist(zone, z, zonelist, high_zoneidx)
-		wakeup_kswapd(zone, order, zone_idx(preferred_zone));
-}
-
 static int alloc_fresh_huge_page(struct hstate *h, nodemask_t *nodes_allowed)
 {
 	struct page *page;
 	int nr_nodes, node;
-	int ret = 0;
-    int tries = 0;
+	int ret = 0, tries = 0, pages_free = 0;
 
     do {
         for_each_node_mask_to_alloc(h, nr_nodes, node, nodes_allowed) {
             page = alloc_fresh_huge_page_node(h, node);
             if (page) {
-                printk("jvs: alloc %d\n", tries);
+                printk("jvs %s/%d: alloc success %d\n", __FILE__, __LINE__, tries);
                 ret = 1;
                 break;
             }
@@ -998,37 +984,40 @@ static int alloc_fresh_huge_page(struct hstate *h, nodemask_t *nodes_allowed)
         if (ret == 0) {
             gfp_t gfp_mask = htlb_alloc_mask|__GFP_COMP|__GFP_THISNODE|
                     __GFP_REPEAT|__GFP_NOWARN;
-            enum zone_type high_zoneidx = gfp_zone(gfp_mask);
+            int zones = 0, unfree_zones = 0, pages = 0;
             for_each_node_mask_to_alloc(h, nr_nodes, node, nodes_allowed) {
                 struct zonelist *zonelist = node_zonelist(node, gfp_mask);
-                struct zone *preferred_zone;
-                first_zones_zonelist(zonelist, high_zoneidx, NULL,
-                        &preferred_zone);
-                if (preferred_zone) {
-                    /*
-                     * alloc_fresh_huge_page_node ->
-                     *     alloc_pages_exact_node -> __alloc_pages(gfp_mask, order,
-                     *                                             node_zonelist(nid, gfp_mask)->
-                     *     __alloc_pages_nodemask (core alloc)
-                     */
-                    printk("jvs: free %d\n", tries);
-                    //__alloc_pages_slowpath(gfp_mask, order, zonelist,
-                    //    high_zoneidx, nodemask, zone, migratetype);
-                    wake_all_kswapds(huge_page_order(h),
-                            zonelist, high_zoneidx, preferred_zone);
-                    // if that doesn't work, move the pages
-                    // has_unmovable_pages() 
-                    // move_freepages
+                int freed;
+                zones++;
+                /*
+                 * alloc_fresh_huge_page_node ->
+                 *    alloc_pages_exact_node -> __alloc_pages(gfp_mask, order,
+                 *                                            node_zonelist(nid, gfp_mask)->
+                 *    __alloc_pages_nodemask (core alloc) ->
+                 *        if (!get_page_from_freelist()) -> __alloc_pages_slowpath
+                 */
+                freed = try_to_free_pages(zonelist, h->order, gfp_mask, nodes_allowed);
+                if (freed > 0) {
+                    pages += freed;
+                } else {
+                    unfree_zones++;
                 }
             }
+            printk("jvs %s/%d %d: freed %d from %d / %d\n", __FILE__, __LINE__, tries,
+                    pages, zones - unfree_zones, zones);
+            pages_free += pages;
             tries++;
         }
     } while (ret == 0 && tries < 3);
 
-	if (ret)
+	if (ret) {
 		count_vm_event(HTLB_BUDDY_PGALLOC);
-	else
+    } else {
 		count_vm_event(HTLB_BUDDY_PGALLOC_FAIL);
+        if (pages_free == 0) {
+            ret = -1; /* Signal that we should probably fail the alloc */
+        }
+    }
 
 	return ret;
 }
@@ -1483,7 +1472,7 @@ static void __init hugetlb_hstate_alloc_pages(struct hstate *h)
 			if (!alloc_bootmem_huge_page(h))
 				break;
 
-		} else if (!alloc_fresh_huge_page(h,
+		} else if (!alloc_fresh_huge_page(h, //jvs?
 					 &node_states[N_MEMORY]))
 			break;
 	}
@@ -1625,7 +1614,7 @@ static unsigned long set_max_huge_pages(struct hstate *h, unsigned long count,
 		else
 			ret = alloc_fresh_huge_page(h, nodes_allowed);
 		spin_lock(&hugetlb_lock);
-		if (!ret)
+		if (ret == -1)
 			goto out;
 
 		/* Bail for signals. Probably ctrl-c from user */

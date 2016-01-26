@@ -2491,8 +2491,10 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
 		goto nopage;
 
 restart:
-	if (!(gfp_mask & __GFP_NO_KSWAPD))
+	if (!(gfp_mask & __GFP_NO_KSWAPD)) {
+        /* printk("jvs %s/%d: all kswapds\n", __FILE__, __LINE__); */
 		wake_all_kswapds(order, zonelist, high_zoneidx, preferred_zone);
+    }
 
 	/*
 	 * OK, we're below the kswapd watermark and have kicked background
@@ -2737,7 +2739,7 @@ retry:
 		 * can deadlock because I/O on the device might not
 		 * complete.
 		 */
-        printk("jvs: nodemask -> slowpath\n");
+        /* printk("jvs: nodemask -> slowpath\n"); */
 		gfp_mask = memalloc_noio_flags(gfp_mask);
 		page = __alloc_pages_slowpath(gfp_mask, order,
 				zonelist, high_zoneidx, nodemask,
