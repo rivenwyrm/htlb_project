@@ -1013,7 +1013,7 @@ static int alloc_fresh_huge_page(struct hstate *h, nodemask_t *nodes_allowed)
 {
 	struct page *page;
 	int nr_nodes, node;
-	int ret = 0, tries = 0, pages_free = 0;
+	int ret = 0, tries = 0, total_pages_free = 0;
 
     do {
         for_each_node_mask_to_alloc(h, nr_nodes, node, nodes_allowed) {
@@ -1022,14 +1022,10 @@ static int alloc_fresh_huge_page(struct hstate *h, nodemask_t *nodes_allowed)
                 printk("jvs %s/%d: alloc success %d\n", __FILE__, __LINE__, tries);
                 ret = 1;
                 break;
-            }
-        }
-
-        if (ret == 0) {
-            gfp_t gfp_mask = htlb_alloc_mask|__GFP_COMP|__GFP_THISNODE|
-                    __GFP_REPEAT|__GFP_NOWARN;
-            int zones = 0, unfree_zones = 0, pages = 0;
-            for_each_node_mask_to_alloc(h, nr_nodes, node, nodes_allowed) {
+            } else {
+                gfp_t gfp_mask = htlb_alloc_mask|__GFP_COMP|__GFP_THISNODE|
+                        __GFP_REPEAT|__GFP_NOWARN;
+                int zones = 0, unfree_zones = 0, pages = 0;
                 struct zonelist *zonelist = node_zonelist(node, gfp_mask);
                 int freed;
                 zones++;
@@ -1046,20 +1042,32 @@ static int alloc_fresh_huge_page(struct hstate *h, nodemask_t *nodes_allowed)
                 } else {
                     unfree_zones++;
                 }
+                printk("jvs %s/%d %d: freed %d from %d / %d\n", __FILE__, __LINE__, tries,
+                        pages, zones - unfree_zones, zones);
+                total_pages_free += pages;
+                tries++;
+                if (pages > 0) {
+                    page = alloc_fresh_huge_page_node(h, node);
+                    if (page) {
+                        printk("jvs %s/%d: alloc retry success %d\n", __FILE__, __LINE__, tries);
+                        ret = 1;
+                    }
+                }
+                break;
             }
-            printk("jvs %s/%d %d: freed %d from %d / %d\n", __FILE__, __LINE__, tries,
-                    pages, zones - unfree_zones, zones);
-            pages_free += pages;
-            tries++;
         }
-    } while (ret == 0 && tries < 3);
+    } while (ret == 0);
 
 	if (ret) {
 		count_vm_event(HTLB_BUDDY_PGALLOC);
     } else {
 		count_vm_event(HTLB_BUDDY_PGALLOC_FAIL);
-        if (pages_free == 0) {
-            ret = -1; /* Signal that we should probably fail the alloc */
+        if (total_pages_free == tries) {
+            /*
+             * We could only free up the kswapd_released pages
+             * and that wasn't enough to alloc. Fail.
+             */
+            ret = -1;
         }
     }
 
