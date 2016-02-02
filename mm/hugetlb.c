@@ -1009,66 +1009,48 @@ static struct page *alloc_fresh_huge_page_node(struct hstate *h, int nid)
 	return page;
 }
 
-static int alloc_fresh_huge_page(struct hstate *h, nodemask_t *nodes_allowed)
+static unsigned int alloc_fresh_huge_page(struct hstate *h, nodemask_t *nodes_allowed)
 {
-	struct page *page;
-	int nr_nodes, node;
-	int ret = 0, tries = 0, total_pages_free = 0;
+	struct page *page = NULL;
+	int nr_nodes, node, ret = 0, num_nodes = 0;
 
-    do {
-        for_each_node_mask_to_alloc(h, nr_nodes, node, nodes_allowed) {
+    for_each_node_mask_to_alloc(h, nr_nodes, node, nodes_allowed) {
+        num_nodes++;
+        page = alloc_fresh_huge_page_node(h, node);
+        if (page) {
+            goto out;
+        }
+    }
+
+    /* find some "fair" way to do this? */
+    for_each_node_mask_to_alloc(h, nr_nodes, node, nodes_allowed) {
+        gfp_t gfp_mask = htlb_alloc_mask|__GFP_COMP|__GFP_THISNODE|
+                __GFP_REPEAT|__GFP_NOWARN;
+        struct zonelist *zonelist = node_zonelist(node, gfp_mask);
+        int freed = try_to_free_pages(zonelist, h->order, gfp_mask, nodes_allowed);
+        printk("jvs %s/%d: freed %d from %d nodes on %d\n", __FILE__, __LINE__, freed, num_nodes, node);
+        if (freed > 0) {
             page = alloc_fresh_huge_page_node(h, node);
             if (page) {
-                printk("jvs %s/%d: alloc success %d\n", __FILE__, __LINE__, tries);
-                ret = 1;
-                break;
-            } else {
-                gfp_t gfp_mask = htlb_alloc_mask|__GFP_COMP|__GFP_THISNODE|
-                        __GFP_REPEAT|__GFP_NOWARN;
-                int zones = 0, unfree_zones = 0, pages = 0;
-                struct zonelist *zonelist = node_zonelist(node, gfp_mask);
-                int freed;
-                zones++;
-                /*
-                 * alloc_fresh_huge_page_node ->
-                 *    alloc_pages_exact_node -> __alloc_pages(gfp_mask, order,
-                 *                                            node_zonelist(nid, gfp_mask)->
-                 *    __alloc_pages_nodemask (core alloc) ->
-                 *        if (!get_page_from_freelist()) -> __alloc_pages_slowpath
-                 */
-                freed = try_to_free_pages(zonelist, h->order, gfp_mask, nodes_allowed);
-                if (freed > 0) {
-                    pages += freed;
-                } else {
-                    unfree_zones++;
-                }
-                printk("jvs %s/%d %d: freed %d from %d / %d\n", __FILE__, __LINE__, tries,
-                        pages, zones - unfree_zones, zones);
-                total_pages_free += pages;
-                tries++;
-                if (pages > 0) {
-                    page = alloc_fresh_huge_page_node(h, node);
-                    if (page) {
-                        printk("jvs %s/%d: alloc retry success %d\n", __FILE__, __LINE__, tries);
-                        ret = 1;
-                    }
-                }
+                printk("jvs %s/%d: retry success on %d\n", __FILE__, __LINE__, node);
                 break;
             }
         }
-    } while (ret == 0);
-
-	if (ret) {
+    }
+    /* alloc_fresh_huge_page_node -> */
+    /*    alloc_pages_exact_node -> __alloc_pages(gfp_mask, order, */
+    /*                                            node_zonelist(nid, gfp_mask)-> */
+    /*    __alloc_pages_nodemask (core alloc) -> */
+    /*        if (!get_page_from_freelist()) -> __alloc_pages_slowpath */
+ out:
+	if (page) {
 		count_vm_event(HTLB_BUDDY_PGALLOC);
+        printk("jvs %s/%d: alloc success %d\n", __FILE__, __LINE__, num_nodes);
+        ret = 1;
     } else {
 		count_vm_event(HTLB_BUDDY_PGALLOC_FAIL);
-        if (total_pages_free == tries) {
-            /*
-             * We could only free up the kswapd_released pages
-             * and that wasn't enough to alloc. Fail.
-             */
-            ret = -1;
-        }
+        printk("jvs %s/%d: alloc fail %d\n", __FILE__, __LINE__, num_nodes);
+        ret = 0;
     }
 
 	return ret;
@@ -1635,7 +1617,7 @@ found:
 static unsigned long set_max_huge_pages(struct hstate *h, unsigned long count,
 						nodemask_t *nodes_allowed)
 {
-	unsigned long min_count, ret;
+	unsigned long min_count, ret = 0, last_ret = 0;
 
 	if (hstate_is_gigantic(h) && !gigantic_page_supported())
 		return h->max_huge_pages;
@@ -1664,13 +1646,18 @@ static unsigned long set_max_huge_pages(struct hstate *h, unsigned long count,
 		 * and reducing the surplus.
 		 */
 		spin_unlock(&hugetlb_lock);
-		if (hstate_is_gigantic(h))
+		if (hstate_is_gigantic(h)) {
 			ret = alloc_fresh_gigantic_page(h, nodes_allowed);
-		else
+        } else {
 			ret = alloc_fresh_huge_page(h, nodes_allowed);
+            printk("jvs %s/%d: %lu/%lu alloc success lr/r %lu / %lu\n",
+                    __FILE__, __LINE__, persistent_huge_pages(h), count,
+                    last_ret, ret);
+        }
 		spin_lock(&hugetlb_lock);
-		if (ret == -1)
-			goto out;
+        if (!last_ret && !ret)
+            goto out;
+        last_ret = ret;
 
 		/* Bail for signals. Probably ctrl-c from user */
 		if (signal_pending(current))
