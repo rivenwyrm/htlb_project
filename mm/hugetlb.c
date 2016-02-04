@@ -37,6 +37,7 @@
 const unsigned long hugetlb_zero = 0, hugetlb_infinity = ~0UL;
 static gfp_t htlb_alloc_mask = GFP_HIGHUSER;
 unsigned long hugepages_treat_as_movable;
+unsigned long hugepages_aggressive_alloc;
 
 int hugetlb_max_hstate __read_mostly;
 unsigned int default_hstate_idx;
@@ -1022,34 +1023,29 @@ static unsigned int alloc_fresh_huge_page(struct hstate *h, nodemask_t *nodes_al
         }
     }
 
-    /* find some "fair" way to do this? */
+    if (!hugepages_aggressive_alloc) {
+        goto out;
+    }
     for_each_node_mask_to_alloc(h, nr_nodes, node, nodes_allowed) {
         gfp_t gfp_mask = htlb_alloc_mask|__GFP_COMP|__GFP_THISNODE|
                 __GFP_REPEAT|__GFP_NOWARN;
         struct zonelist *zonelist = node_zonelist(node, gfp_mask);
-        int freed = try_to_free_pages(zonelist, h->order, gfp_mask, nodes_allowed);
-        printk("jvs %s/%d: freed %d from %d nodes on %d\n", __FILE__, __LINE__, freed, num_nodes, node);
-        if (freed > 0) {
+
+        if (try_to_free_pages(zonelist, h->order, gfp_mask, nodes_allowed) > 0) {
             page = alloc_fresh_huge_page_node(h, node);
             if (page) {
-                printk("jvs %s/%d: retry success on %d\n", __FILE__, __LINE__, node);
+                count_vm_event(HTLB_BUDDY_PGALLOC_RETRY_SUCCESS);
                 break;
             }
+            count_vm_event(HTLB_BUDDY_PGALLOC_RETRY_FAIL);
         }
     }
-    /* alloc_fresh_huge_page_node -> */
-    /*    alloc_pages_exact_node -> __alloc_pages(gfp_mask, order, */
-    /*                                            node_zonelist(nid, gfp_mask)-> */
-    /*    __alloc_pages_nodemask (core alloc) -> */
-    /*        if (!get_page_from_freelist()) -> __alloc_pages_slowpath */
  out:
 	if (page) {
 		count_vm_event(HTLB_BUDDY_PGALLOC);
-        printk("jvs %s/%d: alloc success %d\n", __FILE__, __LINE__, num_nodes);
         ret = 1;
     } else {
 		count_vm_event(HTLB_BUDDY_PGALLOC_FAIL);
-        printk("jvs %s/%d: alloc fail %d\n", __FILE__, __LINE__, num_nodes);
         ret = 0;
     }
 
@@ -1509,7 +1505,7 @@ static void __init hugetlb_hstate_alloc_pages(struct hstate *h)
 			if (!alloc_bootmem_huge_page(h))
 				break;
 
-		} else if (!alloc_fresh_huge_page(h, //jvs?
+		} else if (!alloc_fresh_huge_page(h,
 					 &node_states[N_MEMORY]))
 			break;
 	}
@@ -1617,7 +1613,7 @@ found:
 static unsigned long set_max_huge_pages(struct hstate *h, unsigned long count,
 						nodemask_t *nodes_allowed)
 {
-	unsigned long min_count, ret = 0, last_ret = 0;
+	unsigned long min_count, ret = 0, last_ret = 2;
 
 	if (hstate_is_gigantic(h) && !gigantic_page_supported())
 		return h->max_huge_pages;
@@ -1650,14 +1646,23 @@ static unsigned long set_max_huge_pages(struct hstate *h, unsigned long count,
 			ret = alloc_fresh_gigantic_page(h, nodes_allowed);
         } else {
 			ret = alloc_fresh_huge_page(h, nodes_allowed);
-            printk("jvs %s/%d: %lu/%lu alloc success lr/r %lu / %lu\n",
-                    __FILE__, __LINE__, persistent_huge_pages(h), count,
-                    last_ret, ret);
         }
-		spin_lock(&hugetlb_lock);
-        if (!last_ret && !ret)
-            goto out;
-        last_ret = ret;
+        spin_lock(&hugetlb_lock);
+        if (hstate_is_gigantic(h) || !hugepages_aggressive_alloc) {
+            if (!ret)
+                goto out;
+        } else {
+            /* If two successive allocs failed, bail */
+            if (last_ret == 0) {
+                if (!ret) {
+                    count_vm_event(HTLB_BUDDY_PGALLOC_SUBSEQ_FAIL);
+                    goto out;
+                } else {
+                    count_vm_event(HTLB_BUDDY_PGALLOC_SUBSEQ_SUCCESS);
+                }
+            }
+            last_ret = ret;
+        }
 
 		/* Bail for signals. Probably ctrl-c from user */
 		if (signal_pending(current))
