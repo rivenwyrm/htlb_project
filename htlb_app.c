@@ -9,6 +9,7 @@
 #define LINELEN 255
 #define FILE_PATH_NR_HP "/proc/sys/vm/nr_hugepages"
 #define FILE_PATH_VMSTAT "/proc/vmstat"
+#define FILE_PATH_AGGRESSIVE_ALLOC "/proc/sys/vm/hugepages_aggressive_alloc"
 #define HTLB "htlb"
 #define HTLBLEN (sizeof(HTLB) - 1)
 
@@ -60,7 +61,7 @@ print_cur_hp(void)
  * htlb_buddy_pgalloc_subseq_success 8
 */
 void
-get_stats(int old[6], int counters[6])
+get_stats(int old[6], int counters[6], int accumulator[6], int print)
 {
     char cur[LINELEN];
     FILE *f_vmstat = fopen(FILE_PATH_VMSTAT, "r");
@@ -82,12 +83,25 @@ get_stats(int old[6], int counters[6])
     } while (ind < 6);
     fclose(f_vmstat);
 
+    if (!print) {
+        return;
+    }
+
     printf("%s alloc_success: %d\n", HTLB, counters[0] - old[0]);
     printf("%s alloc_fail: %d\n", HTLB,counters[1] - old[1]);
     printf("%s retry_success: %d\n", HTLB, counters[2] - old[2]);
     printf("%s retry_fail: %d\n", HTLB, counters[3] - old[3]);
     printf("%s subseq_fail: %d\n", HTLB, counters[4] - old[4]);
     printf("%s subseq_success: %d\n", HTLB, counters[5] - old[5]);
+
+    if (accumulator) {
+        accumulator[0] += counters[0] - old[0];
+        accumulator[1] += counters[1] - old[1];
+        accumulator[2] += counters[2] - old[2];
+        accumulator[3] += counters[3] - old[3];
+        accumulator[4] += counters[4] - old[4];
+        accumulator[5] += counters[5] - old[5];
+    }
 }
 
 int
@@ -119,42 +133,103 @@ set_hp(int set_val, int forkmode)
         ret = system(buf);
         printf("set: %d / %d\n", ret, set_val);
     }
+    print_cur_hp();
     return ret;
 }
 
 int
-grab_mem(int grab)
+set_aggr(int set_val)
 {
-    if (grab == -1) {
+    char buf[BUFSIZE * 5];
+    int ret;
+
+    if (set_val == -1) {
         return -1;
     }
 
-    if (mmap(0, 2 << grab, PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0) == MAP_FAILED) {
-        return -1;
-    } else {
-        return 0;
+    snprintf(buf, BUFSIZE*5, "echo %d > %s", set_val, FILE_PATH_AGGRESSIVE_ALLOC);
+    ret = system(buf);
+    printf("aggr: %d / %d\n", ret, set_val);
+    return ret;
+}
+
+void *
+mmap_grab(int grab)
+{
+    if (grab == -1) {
+        return NULL;
     }
+
+    return mmap(0, grab, PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, 0, 0);
+}
+
+void **
+random_grab(int grab)
+{
+    void **ptrs, **ptrs_start = NULL;
+    if (grab == -1) {
+        return NULL;
+    }
+    ptrs_start = ptrs = malloc((grab / 2) / sizeof(void*)); /* Statistically this should be enough */
+    grab -= ((grab / 2) / sizeof(void*));
+    /* Just segfault if we don't get ptrs */
+    while (grab > (2 << 10)) {
+        int tmp_grab = grab * (((float) rand()) / ((float) RAND_MAX));
+        grab -= tmp_grab;
+        *ptrs++ = malloc(tmp_grab);
+    }
+    *ptrs = NULL;
+
+    return ptrs_start;
+}
+
+void
+print_end_stats(int accumulator[6], int iter_val)
+{
+        printf("abs\n");
+        printf("%s alloc_success: %d\n", "abs", accumulator[0]);
+        printf("%s alloc_fail: %d\n", "abs", accumulator[1]);
+        printf("%s retry_success: %d\n", "abs", accumulator[2]);
+        printf("%s retry_fail: %d\n", "abs", accumulator[3]);
+        printf("%s subseq_fail: %d\n", "abs", accumulator[4]);
+        printf("%s subseq_success: %d\n", "abs", accumulator[5]);
+        printf("avgs\n");
+        printf("%s alloc_success: %d\n", "avg", accumulator[0] / iter_val);
+        printf("%s alloc_fail: %d\n", "avg", accumulator[1] / iter_val);
+        printf("%s retry_success: %d\n", "avg", accumulator[2] / iter_val);
+        printf("%s retry_fail: %d\n", "avg", accumulator[3] / iter_val);
+        printf("%s subseq_fail: %d\n", "avg", accumulator[4] / iter_val);
+        printf("%s subseq_success: %d\n", "avg", accumulator[5] / iter_val);
 }
 
 int
 main(int argc, char *argv[])
 {
-    int set_val = -1, grab_val = -1, iter_val = -1, tmp_val = -1, fuzz_val = 0;
-    int argind = 1, ret = 0;
+    int set_arg = -1, grab_arg = -1, iter_arg = 1, tmp_arg = -1, fuzz_arg = 0, aggr_arg = 1, mmap_arg = -1;
+    int argind = 1, ret = 0, iter = 0;
+    int accumulator[6] = { 0 };
 
     while (argind < argc) {
-        switch (parse_arg(argc, argv, argind, &tmp_val)) {
+        switch (parse_arg(argc, argv, argind, &tmp_arg)) {
         case 's':
-            set_val = tmp_val;
+            set_arg = tmp_arg;
+            break;
+        case 'a':
+            aggr_arg = tmp_arg;
             break;
         case 'g':
-            grab_val = tmp_val;
+            grab_arg = tmp_arg;
+            grab_arg = 2 << grab_arg;
+            break;
+        case 'm':
+            mmap_arg = tmp_arg;
+            mmap_arg = 2 << mmap_arg;
             break;
         case 'i':
-            iter_val = tmp_val;
+            iter_arg = tmp_arg;
             break;
         case 'f':
-            fuzz_val = tmp_val;
+            fuzz_arg = tmp_arg;
             break;
         default:
             printf("Read the source for the usage.\n");
@@ -163,37 +238,65 @@ main(int argc, char *argv[])
         }
         argind += 2;
     }
-    printf("args: s %d g %d i %d f %d\n", set_val, grab_val, iter_val, fuzz_val);
+    printf("args: a %d s %d g %d i %d f %d\n", aggr_arg, set_arg, grab_arg, iter_arg, fuzz_arg);
+    mlockall(MCL_FUTURE); /* Doesn't matter for hugepages but does for other allocs */
+    if (set_aggr(aggr_arg) == -1) {
+        printf("hugepages_aggressiv_alloc set fail\n");
+        ret = 1;
+        goto out;
+    }
+
     do {
         int old[6] = { 0 }, new[6] = { 0 };
-        int set = set_val + (((rand() / RAND_MAX) * fuzz_val));
-        int grab = grab_val + (((rand() / RAND_MAX) * fuzz_val));
-        set_hp(0, 0);
+        int set_tmp = set_arg + (((rand() / RAND_MAX) * fuzz_arg));
+        int grab_tmp = grab_arg + (((rand() / RAND_MAX) * fuzz_arg));
+        int mmap_tmp = mmap_arg + (((rand() / RAND_MAX) * fuzz_arg));
+        void **ptr, *mmap_ptr = MAP_FAILED;
 
-        iter_val--;
-        print_cur_hp();
-        printf("iter args: s %d g %d i %d\n", set, grab, iter_val);
-        if (grab_val > -1) {
-            mlockall(MCL_FUTURE);
+        /* Initialize and muck with mem */
+        set_hp(0, 0);
+        iter++;
+        printf("iter args: s %d g %d i %d\n", set_tmp, grab_tmp, iter);
+        if (grab_arg > -1) {
             /* Could release but exit also releases */
-            if (grab_mem(grab) == -1) {
-                printf("failed to mmap\n");
+            ptr = random_grab(grab_tmp);
+            if (ptr == NULL) {
+                printf("failed to grab mem\n");
                 ret = 1;
                 goto out;
             } else {
-                printf("mmap'd %d\n", 2 << grab);
+                printf("grabbed %d\n", 2 << grab_tmp);
             }
         }
-        printf("initial stats\n");
-        get_stats(old, new);
-        if (set_val > -1) {
-            set_hp(set, 0);
-            print_cur_hp();
-            printf("relative change stats\n");
-            get_stats(new, old);
+        if (mmap_arg > -1) {
+            if ((mmap_ptr = mmap_grab(mmap_tmp)) == MAP_FAILED) {
+                printf("failed to grab mem\n");
+                ret = 1;
+                goto out;
+            } else {
+                printf("grabbed %d\n", 2 << mmap_tmp);
+            }
         }
-    } while (iter_val > 0);
+        get_stats(old, new, NULL, 1);
+        /* Do the actual hugepage work */
+        if (set_arg > -1) {
+            set_hp(set_tmp, 0);
+            printf("relative change stats\n");
+            get_stats(new, old, accumulator, 1);
+        }
+        /* Cleanup */
+        while (*ptr != NULL) {
+            free(*ptr);
+            ptr++;
+        }
+        if (mmap_ptr != MAP_FAILED) {
+            munmap(mmap_ptr, mmap_tmp);
+        }
+    } while (iter < iter_arg);
 
+    if (set_arg > -1) {
+        print_end_stats(accumulator, iter_arg);
+    }
  out:
     return ret;
 }

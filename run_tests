@@ -1,0 +1,17 @@
+#!/bin/bash
+
+idx=0
+
+if [ "$1" == "-a" ]; then
+	while [ $idx -le 10 ];
+	do
+	      idx=$((idx + 1))
+	      ./test_app -s 350 -g 27 -i 10 > ./results_test_app/aggr/test_app.$idx.out
+	done
+else
+	while [ $idx -le 10 ];
+	do
+	      idx=$((idx + 1))
+	      ./test_app -s 350 -g 27 -i 10 -a 0 > ./results_test_app/nonaggr/test_app.$idx.out
+	done
+fi
