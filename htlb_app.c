@@ -167,7 +167,8 @@ void **
 random_grab(int grab)
 {
     void **ptrs, **ptrs_start = NULL;
-    if (grab == -1) {
+
+    if (grab <= 0) {
         return NULL;
     }
     ptrs_start = ptrs = malloc((grab / 2) / sizeof(void*)); /* Statistically this should be enough */
@@ -289,6 +290,7 @@ main(int argc, char *argv[])
             free(*ptr);
             ptr++;
         }
+        free(ptr);
         if (mmap_ptr != MAP_FAILED) {
             munmap(mmap_ptr, mmap_tmp);
         }
