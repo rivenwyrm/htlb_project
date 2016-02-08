@@ -2,16 +2,19 @@
 
 idx=0
 
+g=27
+s=350
+
 if [ "$1" == "-a" ]; then
-	while [ $idx -le 10 ];
+	while [ $idx -lt 9 ];
 	do
 	      idx=$((idx + 1))
-	      ./test_app -s 350 -g 27 -i 10 > ./results_test_app/aggr/test_app.$idx.out
+	      ./test_app -s $s -g $g -i 10 > ./results_test_app/aggr/test_app.s${s}.g${g}.${idx}.out
 	done
 else
-	while [ $idx -le 10 ];
+	while [ $idx -lt 9 ];
 	do
 	      idx=$((idx + 1))
-	      ./test_app -s 350 -g 27 -i 10 -a 0 > ./results_test_app/nonaggr/test_app.$idx.out
+	      ./test_app -s $s -g $g -i 10 -a 0 > ./results_test_app/nonaggr/test_app.s${s}.g${g}.${idx}.out
 	done
 fi
