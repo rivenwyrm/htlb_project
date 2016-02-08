@@ -219,12 +219,14 @@ main(int argc, char *argv[])
             aggr_arg = tmp_arg;
             break;
         case 'g':
-            grab_arg = tmp_arg;
-            grab_arg = 2 << grab_arg;
+            if (tmp_arg > 0) {
+                grab_arg = (2 << tmp_arg);
+            }
             break;
         case 'm':
-            mmap_arg = tmp_arg;
-            mmap_arg = 2 << mmap_arg;
+           if (tmp_arg > 0) {
+               mmap_arg = (2 << tmp_arg);
+            }
             break;
         case 'i':
             iter_arg = tmp_arg;
@@ -252,7 +254,7 @@ main(int argc, char *argv[])
         int set_tmp = set_arg + (((rand() / RAND_MAX) * fuzz_arg));
         int grab_tmp = grab_arg + (((rand() / RAND_MAX) * fuzz_arg));
         int mmap_tmp = mmap_arg + (((rand() / RAND_MAX) * fuzz_arg));
-        void **ptr, **start_ptr, *mmap_ptr = MAP_FAILED;
+        void **ptr, **start_ptr = NULL, *mmap_ptr = MAP_FAILED;
 
         /* Initialize and muck with mem */
         set_hp(0, 0);
@@ -286,7 +288,7 @@ main(int argc, char *argv[])
             get_stats(new, old, accumulator, 1);
         }
         /* Cleanup */
-        while ((ptr != NULL) && (*ptr != NULL)) {
+        while ((start_ptr != NULL) && (*ptr != NULL)) {
             free(*ptr);
             ptr++;
         }

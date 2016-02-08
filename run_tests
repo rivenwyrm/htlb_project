@@ -2,15 +2,19 @@
 
 idx=0
 
+mkdir -p ./results_test_app/nonaggr/
+mkdir -p ./results_test_app/aggr/
+
 if [ "$1" == "-g" ]; then
     g=$2
 else
-    g=0
+    echo "give grabmem value"
+    exit 1
 fi
 
 s=350
 
-if [ "$1" == "-a" ]; then
+if [ "$3" == "-a" ]; then
 	while [ $idx -lt 9 ];
 	do
 	      idx=$((idx + 1))
