@@ -252,7 +252,7 @@ main(int argc, char *argv[])
         int set_tmp = set_arg + (((rand() / RAND_MAX) * fuzz_arg));
         int grab_tmp = grab_arg + (((rand() / RAND_MAX) * fuzz_arg));
         int mmap_tmp = mmap_arg + (((rand() / RAND_MAX) * fuzz_arg));
-        void **ptr, *mmap_ptr = MAP_FAILED;
+        void **ptr, **start_ptr, *mmap_ptr = MAP_FAILED;
 
         /* Initialize and muck with mem */
         set_hp(0, 0);
@@ -260,7 +260,7 @@ main(int argc, char *argv[])
         printf("iter args: s %d g %d i %d\n", set_tmp, grab_tmp, iter);
         if (grab_arg > -1) {
             /* Could release but exit also releases */
-            ptr = random_grab(grab_tmp);
+            start_ptr = ptr = random_grab(grab_tmp);
             if (ptr == NULL) {
                 printf("failed to grab mem\n");
                 ret = 1;
@@ -286,11 +286,11 @@ main(int argc, char *argv[])
             get_stats(new, old, accumulator, 1);
         }
         /* Cleanup */
-        while (*ptr != NULL) {
+        while ((ptr != NULL) && (*ptr != NULL)) {
             free(*ptr);
             ptr++;
         }
-        free(ptr);
+        free(start_ptr);
         if (mmap_ptr != MAP_FAILED) {
             munmap(mmap_ptr, mmap_tmp);
         }

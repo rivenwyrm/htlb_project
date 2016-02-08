@@ -2,7 +2,12 @@
 
 idx=0
 
-g=27
+if [ "$1" == "-g" ]; then
+    g=$2
+else
+    g=0
+fi
+
 s=350
 
 if [ "$1" == "-a" ]; then
