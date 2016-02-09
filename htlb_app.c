@@ -4,6 +4,9 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #define BUFSIZE 12
 #define LINELEN 255
@@ -12,6 +15,8 @@
 #define FILE_PATH_AGGRESSIVE_ALLOC "/proc/sys/vm/hugepages_aggressive_alloc"
 #define HTLB "htlb"
 #define HTLBLEN (sizeof(HTLB) - 1)
+#define FILE_PATH_AGGR_OUT "./results_test_app/aggr/"
+#define FILE_PATH_NONAGGR_OUT "./results_test_app/nonaggr/"
 
 int
 parse_arg(int argc, char *argv[], int argind, int *val)
@@ -169,6 +174,7 @@ mem_grab(int grab)
     void **ptrs, **ptrs_start = NULL;
     int ptr_alloc = (grab / (2 << 10)) * sizeof(void*);
     int tmp_grab = 10, ind = 0;
+
     if (grab <= 0) {
         return NULL;
     }
@@ -210,14 +216,38 @@ print_end_stats(int accumulator[6], int iter_val)
 }
 
 int
+redirect_output(char *args, int aggr_arg)
+{
+    char buf[LINELEN];
+    int filefd;
+
+    snprintf(buf, LINELEN, "%s/ta.%s.out", ((aggr_arg > 0) ?
+                    FILE_PATH_AGGR_OUT : FILE_PATH_NONAGGR_OUT),
+            args);
+    filefd = creat(buf, 00444);
+    if (filefd == -1) {
+        printf("Err: Can't open output file '%s'.\n", buf);
+        return -1;
+    }
+    if (dup2(filefd, STDOUT_FILENO) == -1) {
+        printf("Err: Can't redirect output.\n");
+        return -1;
+    }
+    return 1;
+}
+
+int
 main(int argc, char *argv[])
 {
-    int set_arg = -1, grab_arg = -1, iter_arg = 1, tmp_arg = -1, fuzz_arg = 0, aggr_arg = 1, mmap_arg = -1;
+    int set_arg = -1, grab_arg = -1, iter_arg = 1, tmp_arg = -1, file_arg = 0, aggr_arg = 1, mmap_arg = -1, reset_arg = 1;
     int argind = 1, ret = 0, iter = 0;
     int accumulator[6] = { 0 };
 
     while (argind < argc) {
         switch (parse_arg(argc, argv, argind, &tmp_arg)) {
+        case 'r':
+            reset_arg = tmp_arg;
+            break;
         case 's':
             set_arg = tmp_arg;
             break;
@@ -238,7 +268,7 @@ main(int argc, char *argv[])
             iter_arg = tmp_arg;
             break;
         case 'f':
-            fuzz_arg = tmp_arg;
+            file_arg = 1;
             break;
         default:
             printf("Read the source for the usage.\n");
@@ -247,30 +277,40 @@ main(int argc, char *argv[])
         }
         argind += 2;
     }
-    printf("args: a %d s %d g %d i %d f %d\n", aggr_arg, set_arg, grab_arg, iter_arg, fuzz_arg);
-    /* mlockall(MCL_FUTURE); */
+    if (file_arg > 0) {
+        char buf[BUFSIZE * 5];
+        snprintf(buf, BUFSIZE * 5, "a%d.s%d.g%d.i%d.r%d",
+                aggr_arg, set_arg, grab_arg, iter_arg, reset_arg);
+        if (redirect_output(buf, aggr_arg) == -1) {
+            ret = errno;
+            goto out;
+        }
+        printf("args: %s\n", buf);
+    }
     if (set_aggr(aggr_arg) == -1) {
-        printf("hugepages_aggressiv_alloc set fail\n");
+        fprintf(stderr, "hugepages_aggressiv_alloc set fail\n");
         ret = 1;
         goto out;
     }
-
+    /* could mlockall */
     do {
         int old[6] = { 0 }, new[6] = { 0 };
-        int set_tmp = set_arg + (((rand() / RAND_MAX) * fuzz_arg));
-        int grab_tmp = grab_arg + (((rand() / RAND_MAX) * fuzz_arg));
-        int mmap_tmp = mmap_arg + (((rand() / RAND_MAX) * fuzz_arg));
+        int set_tmp = set_arg;
+        int grab_tmp = grab_arg;
+        int mmap_tmp = mmap_arg;
         void **ptr, **start_ptr = NULL, *mmap_ptr = MAP_FAILED;
 
-        /* Initialize and muck with mem */
-        set_hp(0, 0);
+        /* reset by default */
+        if (reset_arg != 0) {
+            set_hp(0, 0);
+        }
         iter++;
         printf("iter args: s %d g %d i %d\n", set_tmp, grab_tmp, iter);
         if (grab_arg > -1) {
             /* Could release but exit also releases */
             start_ptr = ptr = mem_grab(grab_tmp);
             if (ptr == NULL) {
-                printf("failed to grab mem\n");
+                fprintf(stderr, "failed to grab mem\n");
                 ret = 1;
                 goto out;
             } else {
@@ -279,7 +319,7 @@ main(int argc, char *argv[])
         }
         if (mmap_arg > -1) {
             if ((mmap_ptr = mmap_grab(mmap_tmp)) == MAP_FAILED) {
-                printf("failed to grab mem\n");
+                fprintf(stderr, "failed to grab mem\n");
                 ret = 1;
                 goto out;
             } else {
@@ -308,5 +348,6 @@ main(int argc, char *argv[])
         print_end_stats(accumulator, iter_arg);
     }
  out:
+    set_hp(0, 0);
     return ret;
 }
