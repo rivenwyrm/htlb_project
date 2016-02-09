@@ -164,20 +164,26 @@ mmap_grab(int grab)
 }
 
 void **
-random_grab(int grab)
+mem_grab(int grab)
 {
     void **ptrs, **ptrs_start = NULL;
-
+    int ptr_alloc = (grab / (2 << 10)) * sizeof(void*);
+    int tmp_grab = 10, ind = 0;
     if (grab <= 0) {
         return NULL;
     }
-    ptrs_start = ptrs = malloc((grab / 2) / sizeof(void*)); /* Statistically this should be enough */
-    grab -= ((grab / 2) / sizeof(void*));
-    /* Just segfault if we don't get ptrs */
-    while (grab > (2 << 10)) {
-        int tmp_grab = grab * (((float) rand()) / ((float) RAND_MAX));
-        grab -= tmp_grab;
-        *ptrs++ = malloc(tmp_grab);
+    /* Lazily get enough ptr storage for a ptr to every 2k bytes */
+    ptrs_start = ptrs = malloc(ptr_alloc);
+    grab -= ptr_alloc;
+    /* Loop from 10 -> 11 -> 12 -> 13 -> 14 -> 10 */
+    while (grab > 0) {
+        tmp_grab = (tmp_grab == 14) ? 10 : (tmp_grab + 1);
+        grab -= 2 << tmp_grab;
+        *ptrs = malloc(2 << tmp_grab);
+        for (ind = 0; ind < (2 << tmp_grab); ind++) {
+            (*((char**) ptrs))[ind] = ind;
+        }
+        ptrs++;
     }
     *ptrs = NULL;
 
@@ -242,7 +248,7 @@ main(int argc, char *argv[])
         argind += 2;
     }
     printf("args: a %d s %d g %d i %d f %d\n", aggr_arg, set_arg, grab_arg, iter_arg, fuzz_arg);
-    mlockall(MCL_FUTURE); /* Doesn't matter for hugepages but does for other allocs */
+    /* mlockall(MCL_FUTURE); */
     if (set_aggr(aggr_arg) == -1) {
         printf("hugepages_aggressiv_alloc set fail\n");
         ret = 1;
@@ -262,7 +268,7 @@ main(int argc, char *argv[])
         printf("iter args: s %d g %d i %d\n", set_tmp, grab_tmp, iter);
         if (grab_arg > -1) {
             /* Could release but exit also releases */
-            start_ptr = ptr = random_grab(grab_tmp);
+            start_ptr = ptr = mem_grab(grab_tmp);
             if (ptr == NULL) {
                 printf("failed to grab mem\n");
                 ret = 1;
