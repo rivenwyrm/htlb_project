@@ -1012,8 +1012,8 @@ static struct page *alloc_fresh_huge_page_node(struct hstate *h, int nid)
 
 static unsigned int alloc_fresh_huge_page(struct hstate *h, nodemask_t *nodes_allowed)
 {
-	struct page *page = NULL;
-	int nr_nodes, node, ret = 0, num_nodes = 0;
+    struct page *page = NULL;
+    int nr_nodes, node, ret = 0, num_nodes = 0;
 
     for_each_node_mask_to_alloc(h, nr_nodes, node, nodes_allowed) {
         num_nodes++;
@@ -1041,15 +1041,14 @@ static unsigned int alloc_fresh_huge_page(struct hstate *h, nodemask_t *nodes_al
         }
     }
  out:
-	if (page) {
-		count_vm_event(HTLB_BUDDY_PGALLOC);
+    if (page) {
+	count_vm_event(HTLB_BUDDY_PGALLOC);
         ret = 1;
     } else {
-		count_vm_event(HTLB_BUDDY_PGALLOC_FAIL);
+	count_vm_event(HTLB_BUDDY_PGALLOC_FAIL);
         ret = 0;
     }
-
-	return ret;
+    return ret;
 }
 
 /*
