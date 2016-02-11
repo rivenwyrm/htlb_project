@@ -1,1 +1,7 @@
 test_app
+paper/*aux
+paper/*lof
+paper/*log
+paper/*gz
+paper/*toc
+paper/datums/*pdf
