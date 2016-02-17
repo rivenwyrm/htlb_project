@@ -1,0 +1,229 @@
+args: a1.s500.g33554432.i10.r1
+aggr: 0 / 1
+set: 0 / 0
+curhp: 0
+
+iter args: s 500 g 33554432 i 1
+grabbed 2
+htlb alloc_success: 0
+htlb alloc_fail: 0
+htlb retry_success: 0
+htlb retry_fail: 0
+htlb subseq_fail: 0
+htlb subseq_success: 0
+set: 0 / 500
+curhp: 407
+
+relative change stats
+htlb alloc_success: 407
+htlb alloc_fail: 6
+htlb retry_success: 2
+htlb retry_fail: 6
+htlb subseq_fail: 1
+htlb subseq_success: 4
+set: 0 / 0
+curhp: 0
+
+iter args: s 500 g 33554432 i 2
+grabbed 2
+htlb alloc_success: 407
+htlb alloc_fail: 6
+htlb retry_success: 2
+htlb retry_fail: 6
+htlb subseq_fail: 1
+htlb subseq_success: 4
+set: 0 / 500
+curhp: 437
+
+relative change stats
+htlb alloc_success: 437
+htlb alloc_fail: 2
+htlb retry_success: 1
+htlb retry_fail: 2
+htlb subseq_fail: 1
+htlb subseq_success: 0
+set: 0 / 0
+curhp: 0
+
+iter args: s 500 g 33554432 i 3
+grabbed 2
+htlb alloc_success: 844
+htlb alloc_fail: 8
+htlb retry_success: 3
+htlb retry_fail: 8
+htlb subseq_fail: 2
+htlb subseq_success: 4
+set: 0 / 500
+curhp: 464
+
+relative change stats
+htlb alloc_success: 464
+htlb alloc_fail: 2
+htlb retry_success: 0
+htlb retry_fail: 2
+htlb subseq_fail: 1
+htlb subseq_success: 0
+set: 0 / 0
+curhp: 0
+
+iter args: s 500 g 33554432 i 4
+grabbed 2
+htlb alloc_success: 1308
+htlb alloc_fail: 10
+htlb retry_success: 3
+htlb retry_fail: 10
+htlb subseq_fail: 3
+htlb subseq_success: 4
+set: 0 / 500
+curhp: 463
+
+relative change stats
+htlb alloc_success: 463
+htlb alloc_fail: 2
+htlb retry_success: 0
+htlb retry_fail: 2
+htlb subseq_fail: 1
+htlb subseq_success: 0
+set: 0 / 0
+curhp: 0
+
+iter args: s 500 g 33554432 i 5
+grabbed 2
+htlb alloc_success: 1771
+htlb alloc_fail: 12
+htlb retry_success: 3
+htlb retry_fail: 12
+htlb subseq_fail: 4
+htlb subseq_success: 4
+set: 0 / 500
+curhp: 500
+
+relative change stats
+htlb alloc_success: 500
+htlb alloc_fail: 0
+htlb retry_success: 0
+htlb retry_fail: 0
+htlb subseq_fail: 0
+htlb subseq_success: 0
+set: 0 / 0
+curhp: 0
+
+iter args: s 500 g 33554432 i 6
+grabbed 2
+htlb alloc_success: 2271
+htlb alloc_fail: 12
+htlb retry_success: 3
+htlb retry_fail: 12
+htlb subseq_fail: 4
+htlb subseq_success: 4
+set: 0 / 500
+curhp: 500
+
+relative change stats
+htlb alloc_success: 500
+htlb alloc_fail: 0
+htlb retry_success: 0
+htlb retry_fail: 0
+htlb subseq_fail: 0
+htlb subseq_success: 0
+set: 0 / 0
+curhp: 0
+
+iter args: s 500 g 33554432 i 7
+grabbed 2
+htlb alloc_success: 2771
+htlb alloc_fail: 12
+htlb retry_success: 3
+htlb retry_fail: 12
+htlb subseq_fail: 4
+htlb subseq_success: 4
+set: 0 / 500
+curhp: 500
+
+relative change stats
+htlb alloc_success: 500
+htlb alloc_fail: 0
+htlb retry_success: 0
+htlb retry_fail: 0
+htlb subseq_fail: 0
+htlb subseq_success: 0
+set: 0 / 0
+curhp: 0
+
+iter args: s 500 g 33554432 i 8
+grabbed 2
+htlb alloc_success: 3271
+htlb alloc_fail: 12
+htlb retry_success: 3
+htlb retry_fail: 12
+htlb subseq_fail: 4
+htlb subseq_success: 4
+set: 0 / 500
+curhp: 500
+
+relative change stats
+htlb alloc_success: 500
+htlb alloc_fail: 0
+htlb retry_success: 0
+htlb retry_fail: 0
+htlb subseq_fail: 0
+htlb subseq_success: 0
+set: 0 / 0
+curhp: 0
+
+iter args: s 500 g 33554432 i 9
+grabbed 2
+htlb alloc_success: 3771
+htlb alloc_fail: 12
+htlb retry_success: 3
+htlb retry_fail: 12
+htlb subseq_fail: 4
+htlb subseq_success: 4
+set: 0 / 500
+curhp: 500
+
+relative change stats
+htlb alloc_success: 500
+htlb alloc_fail: 0
+htlb retry_success: 0
+htlb retry_fail: 0
+htlb subseq_fail: 0
+htlb subseq_success: 0
+set: 0 / 0
+curhp: 0
+
+iter args: s 500 g 33554432 i 10
+grabbed 2
+htlb alloc_success: 4271
+htlb alloc_fail: 12
+htlb retry_success: 3
+htlb retry_fail: 12
+htlb subseq_fail: 4
+htlb subseq_success: 4
+set: 0 / 500
+curhp: 500
+
+relative change stats
+htlb alloc_success: 500
+htlb alloc_fail: 0
+htlb retry_success: 0
+htlb retry_fail: 0
+htlb subseq_fail: 0
+htlb subseq_success: 0
+abs
+abs alloc_success: 4771
+abs alloc_fail: 12
+abs retry_success: 3
+abs retry_fail: 12
+abs subseq_fail: 4
+abs subseq_success: 4
+avgs
+avg alloc_success: 477
+avg alloc_fail: 1
+avg retry_success: 0
+avg retry_fail: 1
+avg subseq_fail: 0
+avg subseq_success: 0
+set: 0 / 0
+curhp: 0
+

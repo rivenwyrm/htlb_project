@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <time.h>
 
 #define BUFSIZE 12
 #define LINELEN 255
@@ -220,10 +221,11 @@ redirect_output(char *args, int aggr_arg)
 {
     char buf[LINELEN];
     int filefd;
+    long curt = time(NULL);
 
-    snprintf(buf, LINELEN, "%s/ta.%s.out", ((aggr_arg > 0) ?
+    snprintf(buf, LINELEN, "%s/ta.%s.time%ld.out", ((aggr_arg > 0) ?
                     FILE_PATH_AGGR_OUT : FILE_PATH_NONAGGR_OUT),
-            args);
+            args, curt);
     filefd = creat(buf, 00444);
     if (filefd == -1) {
         printf("Err: Can't open output file '%s'.\n", buf);
@@ -239,7 +241,7 @@ redirect_output(char *args, int aggr_arg)
 int
 main(int argc, char *argv[])
 {
-    int set_arg = -1, grab_arg = -1, iter_arg = 1, tmp_arg = -1, file_arg = 0, aggr_arg = 1, mmap_arg = -1, reset_arg = 1;
+    int set_arg = -1, grab_arg = 0, iter_arg = 1, tmp_arg = -1, file_arg = 0, aggr_arg = 1, mmap_arg = -1, reset_arg = 1;
     int argind = 1, ret = 0, iter = 0;
     int accumulator[6] = { 0 };
 
@@ -306,7 +308,7 @@ main(int argc, char *argv[])
         }
         iter++;
         printf("iter args: s %d g %d i %d\n", set_tmp, grab_tmp, iter);
-        if (grab_arg > -1) {
+        if (grab_arg > 0) {
             /* Could release but exit also releases */
             start_ptr = ptr = mem_grab(grab_tmp);
             if (ptr == NULL) {
