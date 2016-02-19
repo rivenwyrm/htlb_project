@@ -4,4 +4,5 @@ paper/*lof
 paper/*log
 paper/*gz
 paper/*toc
+paper/*out
 paper/datums/*pdf
